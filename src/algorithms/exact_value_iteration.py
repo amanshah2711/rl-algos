@@ -1,7 +1,7 @@
 
 import numpy as np
 
-class DPAgent:
+class ExactValueIteration:
 
     def __init__(self, env, discount_factor):
         self.env = env
