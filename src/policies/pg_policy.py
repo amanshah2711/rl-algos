@@ -6,6 +6,8 @@ from torch import optim
 from ..utils.neural_nets import create_mlp
 import torch.nn.functional as F
 
+from numpy.typing import NDArray
+
 from torch.distributions import Categorical
 
 class PGPolicy(MLPPolicy):
@@ -21,31 +23,31 @@ class PGPolicy(MLPPolicy):
                                  num_hidden_layers=2)
         self.optimizer = optim.Adam(self.logits_net.parameters(), learning_rate)
 
-    def policy_improvement_step(self, obs, actions, q_values):
+    def sample_action(self, obs : NDArray) -> int:
+        with torch.no_grad():
+            logits = self(obs)
+        return Categorical(logits=logits).sample().item()
+ 
+    def get_greedy_action(self, obs : NDArray) -> int:
+        with torch.no_grad():
+            logits = self(obs)
+            action = torch.argmax(logits, dim=-1)
+        return action.item()
+
+    def policy_improvement_step(self, obs : NDArray, actions : NDArray, weights : NDArray) -> None:
         obs = torch.from_numpy(obs).float()
         actions = torch.from_numpy(actions).float()
-        q_values = torch.from_numpy(q_values).float()
+        weights = torch.from_numpy(weights).float()
 
         self.optimizer.zero_grad()
 
         logits = self(obs)      # Shape : (num_transitions, ac_dim)
         ac_dist = Categorical(logits=logits)  # Shape (num_transitions, ac_dim) policy dist for each obs
         log_likelihood = ac_dist.log_prob(actions) # Shape : (num_transitions, )
-        pseudo_loss = (-log_likelihood * q_values).mean() # Not a loss in the truest sense, simply a function whose gradient is the PG gradient
+        pseudo_loss = (-log_likelihood * weights).mean() # Not a loss in the truest sense, simply a function whose gradient is the PG gradient
 
         pseudo_loss.backward()
         self.optimizer.step()
-
-    def sample(self, obs):
-        with torch.no_grad():
-            logits = self(obs)
-        return Categorical(logits=logits).sample().item()
- 
-    def get_action(self, obs):
-        with torch.no_grad():
-            logits = self(obs)
-            action = torch.argmax(logits, dim=-1)
-        return action.item()
 
     def forward(self, obs):
         obs = torch.as_tensor(obs, dtype=torch.long)
