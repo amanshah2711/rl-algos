@@ -21,6 +21,7 @@ while not episode_over:
     episode_over = terminated or truncated
 
 
+
 print(env.unwrapped.P)
 print(f"Episode finished! Total reward: {total_reward}")
 
