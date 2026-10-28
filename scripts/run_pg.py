@@ -5,31 +5,81 @@ from src.agents.pg_agent import PGAgent
 from src.policies.pg_policy import PGPolicy
 from src.utils.environment import collect_episodes
 
-n_iters = 1000
-episodes_per_iter = 100
+from torch.utils.tensorboard import SummaryWriter
+import random
+import torch
 
-train_env = gym.make('FrozenLake-v1', is_slippery=False, map_name='4x4')
-agent = PGAgent(target_policy=PGPolicy(train_env.observation_space.n, train_env.action_space.n, learning_rate=1e-3))
+# hyperparameter initialization for training
+env_config = {
+    'id' : 'FrozenLake-v1',
+    'is_slippery' : False,
+    'map_name' : '4x4'
+}
+config = {
+    'algorithm' : 'REINFORCE',
+    'train_iters' : 1000,
+    'episodes_per_train_iter' : 100,
+    'actor_hidden_layer_dim': 4,
+    'actor_num_hidden_layers': 2,
+    'actor_lr' : 1e-3,
+    'discount_factor' : 0.99,
+    'eval_episodes' : 200,
+    'seed' : 2711,
+    **env_config
+}
 
-for i in range(n_iters):
+random.seed(config['seed'])
+torch.manual_seed(config['seed'])
+
+# logging setup
+writer = SummaryWriter(f'runs/{config['algorithm']}/seed_{config['seed']}')
+
+# setting environment
+train_env = gym.make(**env_config)
+obs_dim = train_env.observation_space.n
+act_dim = train_env.action_space.n
+total_env_steps = 0
+
+# setting up agent
+
+target_policy = PGPolicy(obs_dim=obs_dim,
+                         hidden_layer_dim= config['actor_hidden_layer_dim'], 
+                         act_dim=act_dim,          
+                         num_hidden_layers=config['actor_num_hidden_layers'],
+                         lr=config['actor_lr'])
+
+agent = PGAgent(target_policy=target_policy,
+                 discount_factor=config['discount_factor'])
+
+# training loop
+for i in range(config['train_iters']):
     print('current iterations is iteration, ', i)
-    trajectories = collect_episodes(train_env, agent.target_policy, episodes_per_iter)
-    agent.train(trajectories)
+    trajectories = collect_episodes(train_env, agent.target_policy.sample_action, config['episodes_per_train_iter'], seed=config['seed'])
+    total_env_steps += sum([len(episode.obs) for episode in trajectories])
+    
+    metrics = agent.train(trajectories)
+    for name, value in metrics.items():
+        writer.add_scalar(name, value, total_env_steps)
 
 
+# hyperparameters for evaluation
+eval_episodes = config['eval_episodes']
 
-eval_env = gym.make('FrozenLake-v1', is_slippery=False, render_mode='human', map_name='4x4')
-observation, info = eval_env.reset()
+eval_env = gym.make('FrozenLake-v1', is_slippery=False, map_name='4x4')
 
-episode_over = False
-total_reward = 0
+eval_trajectories = collect_episodes(eval_env, agent.target_policy.get_action, eval_episodes)
+success_rate = sum([sum(episode.rewards) for episode in eval_trajectories]) / eval_episodes
 
-while not episode_over:
-    action = agent.target_policy.get_action(observation)
-    observation, reward, terminated, truncated, info = eval_env.step(action)
+writer.add_hparams(
+    hparam_dict=config,
+    metric_dict={
+        "eval/success_rate": success_rate,
+    },
 
-    total_reward += reward
-    episode_over = terminated or truncated
-
+)
+writer.close()
+train_env.close()
+eval_env.close
+    
 
 

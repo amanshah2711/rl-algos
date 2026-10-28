@@ -10,5 +10,10 @@ class QCritic(Critic):
     def update(self, trajectories : list[Trajectory]):
         pass
 
-    def state_action_values(self, obs : NDArray):
+    def reward_estimation(self, trajectories : list[Trajectory]):
         pass
+
+class MCQCritic(Critic):
+    def __init__(self):
+        super().__init__()
+    
