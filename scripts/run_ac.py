@@ -17,7 +17,7 @@ import seaborn as sns
 
 env_config = {
     'id' : 'FrozenLake-v1',
-    'is_slippery' : False,
+    'is_slippery' : True,
     'map_name' : '4x4'
 }
 
@@ -31,6 +31,7 @@ config = {
     'critic_hidden_layer_dim' : 16,
     'critic_num_hidden_layers' : 2,
     'critic_lr': 1e-3,
+    'critic_gradient_steps_per_update' : 100,
     'discount_factor' : 0.99,
     'critic_updates_per_actor_update' : 5,
     'eval_episodes' : 200,
@@ -41,9 +42,11 @@ config = {
 random.seed(config['seed'])
 torch.manual_seed(config['seed'])
 
+from datetime import datetime, timezone
+run_id = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+
 # logging setup
-writer = SummaryWriter()
-writer = SummaryWriter(f'runs/{config['algorithm']}/seed_{config['seed']}')
+writer = SummaryWriter(f'runs/{config['algorithm']}/seed_{config['seed']}/{run_id}')
 
 train_env = gym.make(**env_config)
 obs_dim = train_env.observation_space.n
@@ -60,7 +63,8 @@ critic = DeepValueCritic(obs_dim=obs_dim,
                          hidden_layer_dim=config['critic_hidden_layer_dim'],
                          num_hidden_layers=config['critic_num_hidden_layers'],      
                          discount_factor=config['discount_factor'],
-                         lr=config['critic_lr'])
+                         lr=config['critic_lr'],
+                         gradient_steps_per_update=config['critic_gradient_steps_per_update'])
 
 agent = ACAgent(target_policy=actor,
                 critic=critic,
@@ -71,7 +75,7 @@ for i in range(config['train_iters']):
     print(f'Currently at training iteration {i + 1} / {config['train_iters']}')
 
     trajectories = collect_episodes(train_env, agent.target_policy.sample_action, config['episodes_per_train_iter'], seed=config['seed'])
-    total_env_steps += sum([len(episode.obs) for episode in trajectories])
+    total_env_steps += sum([len(episode.obses) for episode in trajectories])
 
     metrics = agent.train(trajectories)
     for (key, value) in metrics.items():
@@ -80,7 +84,7 @@ for i in range(config['train_iters']):
 
 
 
-eval_env = gym.make('FrozenLake-v1', is_slippery=False, map_name='4x4')
+eval_env = gym.make(**env_config)
 
 eval_trajectories = collect_episodes(eval_env, agent.target_policy.get_action, config['eval_episodes'])
 success_rate = sum([sum(episode.rewards) for episode in eval_trajectories]) / config['eval_episodes']
