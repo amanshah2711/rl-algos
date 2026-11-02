@@ -28,7 +28,7 @@ class ReplayBuffer:
         self.buffer_size = buffer_size 
 
     def add_to_buffer(self, transitions):
-        self.add_to_buffer.extend(transitions)
+        self.buffer.extend(transitions)
         while (len(self.buffer) > self.buffer_size):
             self.buffer.popleft()
 

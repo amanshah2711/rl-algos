@@ -14,7 +14,7 @@ class ACAgent(PGAgent):
         self.critic_updates_per_actor_update = critic_updates_per_actor_update
 
     def train(self, trajectories : list[Trajectory]):
-
+        
         flattened_obses = torch.concat([torch.tensor(trajectory.obses, dtype=torch.long) for trajectory in trajectories])
         flattened_acts = torch.concat([torch.tensor(trajectory.acts, dtype=torch.long) for trajectory in trajectories])
         flattened_rewards = torch.concat([torch.tensor(trajectory.rewards, dtype=torch.float) for trajectory in trajectories])
