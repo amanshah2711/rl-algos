@@ -6,9 +6,9 @@ from ..utils.neural_nets import create_mlp
 
 class DQNAgent(Agent):
 
-    def __init__(self, critic, batch_size, critic_updates_per_batch, target_update_freq, behavior_policy, target_policy, discount_factor):
+    def __init__(self, critic, batch_size, critic_updates_per_batch, target_update_freq, behavior_policy, target_policy, discount_factor, replay_buffer):
         super().__init__()
-        self.replay_buffer = ReplayBuffer(1_000_000)
+        self.replay_buffer = replay_buffer
         self.critic = critic
         self.behavior_policy = behavior_policy
         self.target_policy = target_policy

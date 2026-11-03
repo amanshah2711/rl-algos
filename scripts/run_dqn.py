@@ -20,10 +20,10 @@ env_config = {
 }
 config = {
     'algorithm' : 'DQN',
-    'train_iters' : 2000,
+    'train_iters' : 4500,
     'transitions_per_train_iter' : 1000,
     'target_update_freq' : 100,
-    'batch_size':500,
+    'batch_size': 500,
     'critic_hidden_layer_dim' : 16,
     'critic_num_hidden_layers': 2,
     'critic_updates_per_batch' : 20,
@@ -41,7 +41,7 @@ run_id = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
 writer = SummaryWriter(f'runs/{config['algorithm']}/seed_{config['seed']}/{run_id}')
 
 import gymnasium as gym
-from src.utils.environment import collect_transitions, collect_episodes, discrete_state_encoder
+from src.utils.environment import collect_transitions, collect_episodes, discrete_state_encoder, ReplayBuffer
 train_env = gym.make(**env_config)
 obs_dim = train_env.observation_space.n
 act_dim = train_env.action_space.n
@@ -73,7 +73,8 @@ agent = DQNAgent(
     target_update_freq=config['target_update_freq'],
     behavior_policy = behavior_policy,
     target_policy=target_policy,
-    discount_factor=config['discount_factor']
+    discount_factor=config['discount_factor'],
+    replay_buffer=ReplayBuffer(1_000_000, state_encoder=state_encoder)
 )
 
 for i in range(config['train_iters']):

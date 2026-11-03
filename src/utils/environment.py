@@ -23,24 +23,41 @@ class Transition:
 
 class ReplayBuffer:
 
-    def __init__(self, buffer_size):
+    def __init__(self, buffer_size, state_encoder):
         self.buffer = deque([])
         self.buffer_size = buffer_size 
+        self.obses = np.empty(shape=(buffer_size, ), dtype=np.int64)
+        self.acts = np.empty(shape=(buffer_size, ))
+        self.rewards = np.empty(shape=(buffer_size, ))
+        self.next_obses = np.empty(shape=(buffer_size, ), dtype=np.int64)
+        self.terminals = np.empty(shape=(buffer_size, ))
+        self.state_encoder = state_encoder
+        self.end = 0
 
     def add_to_buffer(self, transitions):
-        self.buffer.extend(transitions)
-        while (len(self.buffer) > self.buffer_size):
-            self.buffer.popleft()
+        for i, (obs, act, reward, next_obs, terminal)  in enumerate(transitions):
+            self.obses[(self.end + i) % self.buffer_size] = np.argmax(obs)
+            self.acts[(self.end + i) % self.buffer_size] = act 
+            self.rewards[(self.end + i) % self.buffer_size] = reward 
+            self.next_obses[(self.end + i) % self.buffer_size] = np.argmax(next_obs)
+            self.terminals[(self.end + i) % self.buffer_size] = terminal 
+
+        self.end += len(transitions) 
+        #self.buffer.extend(transitions)
+        #while (len(self.buffer) > self.buffer_size):
+            #self.buffer.popleft()
 
     def sample_transitions(self, n):
-        transitions = random.choices(self.buffer, k=n)
-        return (
-            np.array([transition[0] for transition in transitions]),
-            np.array([transition[1] for transition in transitions]),
-            np.array([transition[2] for transition in transitions]),
-            np.array([transition[3] for transition in transitions]),
-            np.array([transition[4] for transition in transitions])
-        )
+        indices = np.random.randint(0, min(self.end, self.buffer_size), size=n)
+        return self.state_encoder(self.obses[indices]), self.acts[indices], self.rewards[indices], self.state_encoder(self.next_obses[indices]), self.terminals[indices]
+        #transitions = random.choices(self.buffer, k=n)
+        #return (
+            #np.array([transition[0] for transition in transitions]),
+            #np.array([transition[1] for transition in transitions]),
+            #np.array([transition[2] for transition in transitions]),
+            #np.array([transition[3] for transition in transitions]),
+            #np.array([transition[4] for transition in transitions])
+        #)
 
 
 def discrete_state_encoder(obs, obs_dim): 
