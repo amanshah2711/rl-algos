@@ -23,24 +23,33 @@ class PGPolicy(MLPPolicy):
                                  num_hidden_layers=num_hidden_layers)
         self.optimizer = optim.Adam(self.logits_net.parameters(), lr)
 
-    def sample_action(self, obs : int) -> int:
+    def sample_action(self, obs) -> int:
         with torch.no_grad():
-            logits = self(torch.tensor(obs))  # (ac_dim, )
+            logits = self(torch.as_tensor(obs, dtype=torch.float))  
+        if obs.ndim == 1:
             return Categorical(logits=logits).sample().item()
+        else:
+            return Categorical(logits=logits).sample().numpy()
  
-    def get_action(self, obs : int) -> int:
+    def get_action(self, obs) -> int:
         with torch.no_grad():
-            logits = self(torch.tensor(obs)) # (ac_dim, )
-            action = torch.argmax(logits)
-            return action.item()
+            logits = self(torch.as_tensor(obs, dtype=torch.float)) # Shape (obs_dim, ) in, (act_dim, )
+        if obs.ndim == 1:
+            return torch.argmax(logits).item()
+        else:
+            return torch.argmax(logits, dim=-1)
 
-    def update(self, obs : torch.LongTensor, actions : torch.LongTensor, weights : torch.FloatTensor) -> None:
+    def update(self, obses : NDArray, acts : NDArray, weights : NDArray) -> None:
+
+        obses = torch.from_numpy(obses).to(torch.float) # Shape : (num_transitions, obs_dim)
+        acts = torch.from_numpy(acts).to(torch.float) # Shape : (num_transitions, act_dim)
+        weights = torch.from_numpy(weights).to(torch.float) # Shape : (num_transitions, )
 
         self.optimizer.zero_grad()
 
-        logits = self(obs)      # Shape : (num_transitions, ac_dim)
+        logits = self(obses)      # Shape : (num_transitions, act_dim)
         ac_dist = Categorical(logits=logits)  # batch shape for this distribution is (num_transitions, )
-        log_likelihood = ac_dist.log_prob(actions) # Shape : (num_transitions, )
+        log_likelihood = ac_dist.log_prob(acts) # Shape : (num_transitions, )
         pseudo_loss = (-log_likelihood * weights).mean() # Not a loss in the truest sense, simply a function whose gradient is the PG gradient
 
         pseudo_loss.backward()
@@ -48,6 +57,5 @@ class PGPolicy(MLPPolicy):
 
         return {'train/actor_loss' : pseudo_loss.item()}
 
-    def forward(self, obs : torch.LongTensor):
-        obs = F.one_hot(obs, num_classes=self.obs_dim).to(dtype=torch.float32)
+    def forward(self, obs):
         return self.logits_net(obs)

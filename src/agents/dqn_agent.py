@@ -10,8 +10,8 @@ class DQNAgent(Agent):
         super().__init__()
         self.replay_buffer = ReplayBuffer(1_000_000)
         self.critic = critic
-        self.behavior_policy = EpsilonGreedyPolicy(critic=critic, epsilon=epsilon)
-        self.target_policy = EpsilonGreedyPolicy(critic=critic, epsilon=0)
+        self.behavior_policy = behavior_policy
+        self.target_policy = target_policy
         self.batch_size = batch_size
         self.critic_updates_per_batch = critic_updates_per_batch
         self.target_update_freq = target_update_freq
@@ -22,8 +22,8 @@ class DQNAgent(Agent):
         self.replay_buffer.add_to_buffer(transitions)
         
         for _ in range(self.critic_updates_per_batch): # Mathematically an approximation of the bellman backup operator
-            transitions = self.replay_buffer.sample_transitions(self.batch_size)
-            metrics = self.critic.update(transitions)
+            obses, acts, rewards, next_obses, terminals = self.replay_buffer.sample_transitions(self.batch_size)
+            metrics = self.critic.update(obses, acts, rewards, next_obses, terminals)
 
         self.t += 1
         if (self.t % self.target_update_freq): 

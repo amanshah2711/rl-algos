@@ -16,24 +16,29 @@ class DQNCritic(Critic, nn.Module):
         self.discount_factor = discount_factor
         self.update_target_network()
 
+    def get_state_action_value(self, obses):
+        with torch.no_grad():
+            return self(torch.as_tensor(obses, dtype=torch.float)).numpy() 
+
     def update_target_network(self):
         for (target_param, param) in zip(self.target_critic_net.parameters(), self.critic_net.parameters()):
             target_param.data.copy_(param)
 
-    def update(self, transitions):
-        obses = torch.tensor([transition[0] for transition in transitions], dtype=torch.long) # Shape (num_transitions, )
-        acts = torch.tensor([transition[1] for transition in transitions], dtype=torch.long) # Shape (num_transitions, )
-        rewards = torch.tensor([transition[2] for transition in transitions], dtype=torch.float) # Shape(num_transitions, )
-        next_obses = torch.tensor([transition[3] for transition in transitions], dtype=torch.long) # Shape (num_transitions, )
-        terminals = torch.tensor([transition[4] for transition in transitions], dtype=torch.float) # Shape (num_transitions, )
+    def update(self, obses, acts, rewards, next_obses, terminals):
+
+        obses = torch.as_tensor(obses, dtype=torch.float) # Shape (num_transitions, obs_dim)
+        acts = torch.as_tensor(acts, dtype=torch.long) # Shape (num_transitions, )
+        rewards = torch.as_tensor(rewards, dtype=torch.float) # Shape(num_transitions, )
+        next_obses = torch.as_tensor(next_obses, dtype=torch.float) # Shape (num_transitions, obs_dim)
+        terminals = torch.as_tensor(terminals, dtype=torch.long) # Shape (num_transitions, )
+        num_transitions = obses.size(0)
 
         with torch.no_grad():
-            one_hot_obses = F.one_hot(next_obses, num_classes=self.obs_dim).to(dtype=torch.float) # Shape (num_transitions, obs_dim)
-            state_action_values = self.target_critic_net(one_hot_obses) # Shape (num_transitions, act_dim)
+            state_action_values = self.target_critic_net(next_obses) # Shape (num_transitions, act_dim)
             targets = rewards + self.discount_factor * (1-terminals) * torch.max(state_action_values, dim=1).values # Shape (num_transitions, )
 
         self.optimizer.zero_grad()
-        loss = F.huber_loss(self(obses)[torch.arange(0, len(transitions)), acts], targets, reduction='mean')
+        loss = F.huber_loss(self(obses)[torch.arange(0, num_transitions), acts], targets, reduction='mean')
         loss.backward()
         self.optimizer.step()
 
@@ -41,6 +46,5 @@ class DQNCritic(Critic, nn.Module):
             'train/critic_loss' : loss.item()
         }
 
-    def forward(self, obs : torch.LongTensor) -> torch.LongTensor:
-        obs = F.one_hot(obs, num_classes=self.obs_dim).to(dtype=torch.float) # (num_observations, obs_dim)
+    def forward(self, obs):
         return self.critic_net(obs) # (num_observations, act_dim)

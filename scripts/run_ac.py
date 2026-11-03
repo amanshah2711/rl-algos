@@ -1,24 +1,35 @@
 
-import gymnasium as gym
+# Python Libraries
+import argparse
+import random
+from datetime import datetime, timezone
 
+# RL Implementations
 from src.agents.ac_agent import ACAgent
 from src.policies.pg_policy import PGPolicy
 from src.critics.value_critic import DeepValueCritic
-from src.utils.environment import collect_episodes
-import math
+from src.utils.environment import collect_episodes, discrete_state_encoder
+from src.utils.visualization import plot_value
 
-
+# Environment 
+import gymnasium as gym
 import torch
-import random
+
+# Logging Data
 from torch.utils.tensorboard import SummaryWriter
 
-import matplotlib.pyplot as plt
-import seaborn as sns
+parser = argparse.ArgumentParser()
+parser.add_argument('--seed', type=int, required=True, help='Random seed used for reproducibility and verifiability of experiments')
+args = parser.parse_args()
+
+random.seed(args.seed)
+torch.manual_seed(args.seed)
 
 env_config = {
     'id' : 'FrozenLake-v1',
     'is_slippery' : True,
-    'map_name' : '4x4'
+    'map_name' : '4x4',
+    'render_mode' : 'rgb_array'
 }
 
 config = {
@@ -35,24 +46,27 @@ config = {
     'discount_factor' : 0.99,
     'critic_updates_per_actor_update' : 5,
     'eval_episodes' : 200,
-    'seed' : 2711,
+    'seed' : args.seed,
     **env_config
 }
 
-random.seed(config['seed'])
-torch.manual_seed(config['seed'])
 
-from datetime import datetime, timezone
+# Logging Setup
 run_id = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-
-# logging setup
 writer = SummaryWriter(f'runs/{config['algorithm']}/seed_{config['seed']}/{run_id}')
 
+# Environment Configuration
 train_env = gym.make(**env_config)
 obs_dim = train_env.observation_space.n
 act_dim = train_env.action_space.n
 total_env_steps = 0
 
+if isinstance(train_env.observation_space, gym.spaces.Discrete):
+    state_encoder = lambda obs: discrete_state_encoder(obs, obs_dim)
+else:
+    state_encoder = lambda x : x
+
+# RL Setup
 actor = PGPolicy(obs_dim=obs_dim,
                  hidden_layer_dim=config['actor_hidden_layer_dim'],
                  act_dim=act_dim, 
@@ -71,10 +85,12 @@ agent = ACAgent(target_policy=actor,
                 critic_updates_per_actor_update=config['critic_updates_per_actor_update'],
                 discount_factor=config['discount_factor'])
 
+
+# Training Loop
 for i in range(config['train_iters']):
     print(f'Currently at training iteration {i + 1} / {config['train_iters']}')
 
-    trajectories = collect_episodes(train_env, agent.target_policy.sample_action, config['episodes_per_train_iter'], seed=config['seed'])
+    trajectories = collect_episodes(train_env, agent.target_policy.sample_action, config['episodes_per_train_iter'], state_encoder=state_encoder, seed=config['seed'])
     total_env_steps += sum([len(episode.obses) for episode in trajectories])
 
     metrics = agent.train(trajectories)
@@ -82,22 +98,27 @@ for i in range(config['train_iters']):
         writer.add_scalar(key, value, total_env_steps)
 
 
-
-
+# Final Evaluation
 eval_env = gym.make(**env_config)
 
-eval_trajectories = collect_episodes(eval_env, agent.target_policy.get_action, config['eval_episodes'])
+save_episodes = random.choices([i for i in range(config['eval_episodes'])], k = 3)
+eval_trajectories, recordings = collect_episodes(eval_env, agent.target_policy.get_action, config['eval_episodes'], state_encoder=state_encoder, seed=config['seed'], save_episodes=save_episodes)
+
+# Compute success rate 
 success_rate = sum([sum(episode.rewards) for episode in eval_trajectories]) / config['eval_episodes']
 
-grid_length = math.isqrt(obs_dim)
-states = torch.arange(0, obs_dim)
-with torch.no_grad():
-    values = critic(states).reshape((grid_length, grid_length)).numpy()
+# Record Videos
+videos = [torch.from_numpy(video).permute(0, 3, 1, 2).unsqueeze(0) for video in recordings]
+for i, video in enumerate(videos): 
+    writer.add_video(
+        f"evaluation/video_{i}",
+        video,
+        global_step=total_env_steps,
+        fps=4
+    )
 
-fig, ax = plt.subplots()
-sns.heatmap(values, annot=True, cmap='viridis', ax=ax)
-ax.set_title('Critic State Value Esimates')
-writer.add_figure('critic/state_value_estimates', fig, global_step=total_env_steps)
+# Visualizations (Value function heatmap)
+writer.add_figure('critic/state_value_estimates', plot_value(value_func=critic.get_value, state_encoder=state_encoder), global_step=total_env_steps)
 
 writer.add_hparams(
     hparam_dict=config,

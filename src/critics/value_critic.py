@@ -13,23 +13,28 @@ class DeepValueCritic(Critic, nn.Module):
     def __init__(self, obs_dim, hidden_layer_dim, num_hidden_layers, discount_factor, lr, gradient_steps_per_update):
         super().__init__()
         self.obs_dim = obs_dim
-        self.critic_net = create_mlp(obs_dim, hidden_layer_dim, 1, num_hidden_layers) # TODO : Go back and changes the hidden layer dim to be customizable and customize num hidden layer
+        self.critic_net = create_mlp(obs_dim, hidden_layer_dim, 1, num_hidden_layers) 
         self.discount_factor = discount_factor
         self.optimizer = optim.Adam(self.critic_net.parameters(), lr=lr)
         self.gradient_steps_per_update = gradient_steps_per_update
     
-    def get_value(self, obs : int) -> int: 
+    def get_value(self, obs): 
         with torch.no_grad():
-            return self(torch.tensor(obs, dtype=torch.long)).item()
+            return self(torch.as_tensor(obs, dtype=torch.float)).numpy()
 
-    def update(self, obs : torch.LongTensor, rewards : torch.FloatTensor, next_obs : torch.LongTensor, terminals : torch.LongTensor):
+    def update(self, obses : NDArray, rewards : NDArray, next_obses : NDArray, terminals : NDArray):
+
+        obses = torch.from_numpy(obses).to(dtype=torch.float)
+        rewards = torch.from_numpy(rewards).to(dtype=torch.float)
+        next_obses = torch.from_numpy(next_obses).to(dtype=torch.float)
+        terminals = torch.from_numpy(terminals).to(dtype=torch.float)
 
         with torch.no_grad():
-            targets = rewards + self.discount_factor * (1 - terminals) * self(next_obs)
+            targets = rewards + self.discount_factor * (1 - terminals) * self(next_obses)
 
         for _ in range(self.gradient_steps_per_update):
             self.optimizer.zero_grad()
-            loss = F.mse_loss(self(obs), targets, reduction='mean')
+            loss = F.mse_loss(self(obses), targets, reduction='mean')
             loss.backward()
             self.optimizer.step()
 
@@ -37,6 +42,5 @@ class DeepValueCritic(Critic, nn.Module):
             'train/critic_loss' : loss.item()
         }
 
-    def forward(self, obs : torch.LongTensor) -> torch.FloatTensor:
-        obs = F.one_hot(obs, num_classes=self.obs_dim).to(dtype=torch.float) # (num_observations, ob_dim)
+    def forward(self, obs):
         return self.critic_net(obs).squeeze(-1) # (num_observations, )

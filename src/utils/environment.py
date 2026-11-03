@@ -9,8 +9,8 @@ import random
 class Trajectory:
     obses : list[int]
     acts : list[int]
-    next_obses : list[int]
     rewards : list[int]
+    next_obses : list[int]
     terminals : list[bool]
 
 @dataclass
@@ -33,41 +33,65 @@ class ReplayBuffer:
             self.buffer.popleft()
 
     def sample_transitions(self, n):
-        return random.choices(self.buffer, k=n)
+        transitions = random.choices(self.buffer, k=n)
+        return (
+            np.array([transition[0] for transition in transitions]),
+            np.array([transition[1] for transition in transitions]),
+            np.array([transition[2] for transition in transitions]),
+            np.array([transition[3] for transition in transitions]),
+            np.array([transition[4] for transition in transitions])
+        )
 
 
-def collect_episodes(env, behavior_policy, num_episodes, seed=2711) -> list[Trajectory]:
+def discrete_state_encoder(obs, obs_dim): 
+    return np.eye(obs_dim)[obs]
+
+def collect_episodes(env, behavior_policy, num_episodes, state_encoder, seed, save_episodes=[]) -> list[Trajectory]:
     trajectories = []
-    for _ in range(num_episodes):
+    recordings = []
+    for i in range(num_episodes):
+        frames = []
         episode_over = False
-        ob, info = env.reset(seed=seed)
+        obs, info = env.reset(seed=seed)
+        obs = state_encoder(obs)
+        if i in save_episodes:
+            frames.append(env.render())
         obses, acts, next_obses, rewards, terminals = [], [], [], [] ,[]
         while not episode_over:
-            obses.append(ob)
+            obses.append(obs)
 
-            act = behavior_policy(ob)
-            ob, reward, terminated, truncated, info = env.step(act)
+            act = behavior_policy(obs)
+            obs, reward, terminated, truncated, info = env.step(act)
+            obs = state_encoder(obs)
+            if i in save_episodes:
+                frames.append(env.render())
 
             episode_over = terminated or truncated
 
             acts.append(act)
             rewards.append(reward)
-            next_obses.append(ob)
+            next_obses.append(obs)
             terminals.append(terminated)
 
-        trajectories.append(Trajectory(obses, acts, next_obses, rewards, terminals))
-    return trajectories
+        trajectories.append(Trajectory(obses, acts, rewards, next_obses, terminals))
+        if i in save_episodes:
+            recordings.append(np.array(frames))
+    if save_episodes:
+        return trajectories, recordings
+    else:
+        return trajectories
 
-def collect_transitions(env, obs, behavior_policy, num_transitions, seed=2711):
+def collect_transitions(env, obs, behavior_policy, num_transitions, state_encoder, seed):
     transitions = []
     for _ in range(num_transitions):
         act = behavior_policy(obs)
         next_obs, reward, terminated, truncated, info = env.step(act)
-        transitions.append((obs, act, reward, next_obs, terminated))
+        transitions.append((obs, act, reward, state_encoder(next_obs), terminated))
         if terminated or truncated:
             obs, info = env.reset(seed=seed)
         else:
             obs = next_obs
+        obs = state_encoder(obs)
     return (obs, transitions)
 
 def compute_returns(trajectories : list[Trajectory], gamma: float):

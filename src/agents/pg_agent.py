@@ -1,7 +1,7 @@
 
 from .base_agent import Agent
 from ..utils.environment import Trajectory, compute_returns
-import torch
+import numpy as np
 
 class PGAgent(Agent):
 
@@ -10,15 +10,15 @@ class PGAgent(Agent):
         self.discount_factor = discount_factor
 
     def train(self, trajectories : list[Trajectory]):
-        flattened_q_values= torch.concat([torch.tensor(sample) for sample in compute_returns(trajectories, self.discount_factor)])
-        flattened_obs = torch.concat([torch.tensor(trajectory.obs, dtype=torch.long) for trajectory in trajectories])
-        flattened_acs = torch.concat([torch.tensor(trajectory.acs, dtype=torch.long) for trajectory in trajectories])
+        flattened_q_values= np.concat([sample for sample in compute_returns(trajectories, self.discount_factor)])
+        flattened_obs = np.concat([trajectory.obses for trajectory in trajectories])
+        flattened_acs = np.concat([trajectory.acts for trajectory in trajectories])
 
         policy_metrics = self.target_policy.update(flattened_obs, flattened_acs, flattened_q_values)
         return {
             **policy_metrics,
-            'train/mean_reward_to_go' : flattened_q_values.mean().item(),
-            'train/mean_episode_return' : torch.tensor([sum(episode.rewards) for episode in trajectories], dtype=torch.float).mean().item()
+            'train/mean_reward_to_go' : np.mean(flattened_q_values),
+            'train/mean_episode_return' : np.mean([sum(episode.rewards) for episode in trajectories])
         }
 
     
