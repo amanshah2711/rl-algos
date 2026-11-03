@@ -32,7 +32,7 @@ env_config = {
 }
 config = {
     'algorithm' : 'REINFORCE',
-    'train_iters' : 1000,
+    'train_iters' : 2000,
     'episodes_per_train_iter' : 100,
     'actor_hidden_layer_dim': 4,
     'actor_num_hidden_layers': 2,

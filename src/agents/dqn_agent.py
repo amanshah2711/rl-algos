@@ -26,7 +26,7 @@ class DQNAgent(Agent):
             metrics = self.critic.update(obses, acts, rewards, next_obses, terminals)
 
         self.t += 1
-        if (self.t % self.target_update_freq): 
+        if (self.t % self.target_update_freq == 0): 
             self.critic.update_target_network()
 
         return metrics

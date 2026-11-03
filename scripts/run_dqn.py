@@ -4,15 +4,9 @@ from src.critics.dqn_critic import DQNCritic
 from src.policies.greedy_policy import EpsilonGreedyPolicy
 from src.utils.visualization import plot_state_action_value
 
-import math
-
-
 import torch
 import random
 from torch.utils.tensorboard import SummaryWriter
-
-import matplotlib.pyplot as plt
-import seaborn as sns
 
 env_config = {
     'id' : 'FrozenLake-v1',
@@ -22,14 +16,14 @@ env_config = {
 }
 config = {
     'algorithm' : 'DQN',
-    'train_iters' : 7500,
-    'transitions_per_train_iter' : 1000,
-    'target_update_freq' : 100,
-    'batch_size': 500,
+    'train_iters' : 1000,
+    'transitions_per_train_iter' : 500,
+    'target_update_freq' : 5,
+    'batch_size': 256,
     'critic_hidden_layer_dim' : 16,
     'critic_num_hidden_layers': 2,
     'critic_updates_per_batch' : 20,
-    'exploration_rate' : 0.2,
+    'exploration_rate' : 0.05,
     'critic_lr' : 1e-3,
     'discount_factor' : 0.99,
     'eval_episodes' : 200,
@@ -65,8 +59,8 @@ critic = DQNCritic(
     discount_factor=config['discount_factor']
 )
 
-behavior_policy = EpsilonGreedyPolicy(critic=critic, epsilon=config['exploration_rate'])
-target_policy = EpsilonGreedyPolicy(critic=critic, epsilon=0)
+behavior_policy = EpsilonGreedyPolicy(critic=critic, epsilon=config['exploration_rate'], action_sampler=train_env.action_space.sample)
+target_policy = EpsilonGreedyPolicy(critic=critic, epsilon=0, action_sampler=train_env.action_space.sample)
 
 agent = DQNAgent(
     critic=critic,
@@ -83,6 +77,7 @@ for i in range(config['train_iters']):
     print(f'Currently at training iteration {i + 1} / {config['train_iters']}')
     obs, transitions = collect_transitions(train_env, obs, agent.behavior_policy.get_action, num_transitions=config['transitions_per_train_iter'], state_encoder=state_encoder, seed=config['seed'])
     total_env_steps += len(transitions)
+    agent.behavior_policy.epsilon = max(config['exploration_rate'], 1 - total_env_steps * (1 - config['exploration_rate']) / (config['train_iters'] * config['transitions_per_train_iter']))
     metrics = agent.train(transitions=transitions)
     for (key, value) in metrics.items():
         writer.add_scalar(key, value, total_env_steps)
