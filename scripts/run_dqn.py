@@ -2,6 +2,7 @@
 from src.agents.dqn_agent import DQNAgent
 from src.critics.dqn_critic import DQNCritic
 from src.policies.greedy_policy import EpsilonGreedyPolicy
+from src.utils.visualization import plot_state_action_value
 
 import math
 
@@ -16,11 +17,12 @@ import seaborn as sns
 env_config = {
     'id' : 'FrozenLake-v1',
     'is_slippery' : False,
-    'map_name' : '4x4'
+    'map_name' : '4x4',
+    'render_mode' : 'rgb_array'
 }
 config = {
     'algorithm' : 'DQN',
-    'train_iters' : 4500,
+    'train_iters' : 7500,
     'transitions_per_train_iter' : 1000,
     'target_update_freq' : 100,
     'batch_size': 500,
@@ -88,18 +90,28 @@ for i in range(config['train_iters']):
 
 eval_env = gym.make(**env_config)
 
-eval_trajectories = collect_episodes(eval_env, agent.target_policy.get_action, config['eval_episodes'], state_encoder=state_encoder, seed=config['seed'])
+
+save_episodes = random.choices([i for i in range(config['eval_episodes'])], k = 3)
+eval_trajectories, recordings = collect_episodes(eval_env, agent.target_policy.get_action, config['eval_episodes'], state_encoder=state_encoder, seed=config['seed'], save_episodes=save_episodes)
+
+
+# Compute success rate
 success_rate = sum([sum(episode.rewards) for episode in eval_trajectories]) / config['eval_episodes']
 
-grid_length = math.isqrt(obs_dim)
-states = state_encoder(torch.arange(0, obs_dim))
-import numpy as np
-values = np.max(critic.get_state_action_value(states), axis=-1).reshape((grid_length, grid_length))
+# Record Videos
+videos = [torch.from_numpy(video).permute(0, 3, 1, 2).unsqueeze(0) for video in recordings]
+for i, video in enumerate(videos): 
+    writer.add_video(
+        f"evaluation/video_{i}",
+        video,
+        global_step=total_env_steps,
+        fps=4
+    )
 
-fig, ax = plt.subplots()
-sns.heatmap(values, annot=True, cmap='viridis', ax=ax)
-ax.set_title('Critic State Value Esimates')
-writer.add_figure('critic/state_value_estimates', fig, global_step=total_env_steps)
+
+writer.add_figure('critic/state_value_estimates',
+                  plot_state_action_value(critic.get_state_action_value, state_encoder),
+                  global_step=total_env_steps)
 
 writer.add_hparams(
     hparam_dict=config,

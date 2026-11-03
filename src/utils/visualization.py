@@ -16,5 +16,13 @@ def plot_value(value_func, state_encoder):
 
     return fig
 
-def plot_state_action_value(q_func):
-    pass
+def plot_state_action_value(q_func, state_encoder):
+    grid_length = 4
+    encoded_states = state_encoder(np.arange(0, 16))
+    values = np.max(q_func(encoded_states), axis=-1).reshape((grid_length, grid_length))
+
+    fig, ax = plt.subplots()
+    sns.heatmap(values, annot=True, cmap='viridis', ax=ax)
+    ax.set_title('Critic State Value Estimates')
+
+    return fig
