@@ -27,14 +27,14 @@ torch.manual_seed(args.seed)
 
 env_config = {
     'id' : 'FrozenLake-v1',
-    'is_slippery' : True,
+    'is_slippery' : False,
     'map_name' : '4x4',
     'render_mode' : 'rgb_array'
 }
 
 config = {
     'algorithm' : 'Actor-Critic',
-    'train_iters' : 1000,
+    'train_iters' : 1500,
     'episodes_per_train_iter' : 100,
     'actor_hidden_layer_dim' : 4,
     'actor_num_hidden_layers' : 2,
@@ -42,7 +42,7 @@ config = {
     'critic_hidden_layer_dim' : 16,
     'critic_num_hidden_layers' : 2,
     'critic_lr': 1e-3,
-    'critic_gradient_steps_per_update' : 100,
+    'critic_gradient_steps_per_update' : 10,
     'discount_factor' : 0.99,
     'critic_updates_per_actor_update' : 5,
     'eval_episodes' : 200,

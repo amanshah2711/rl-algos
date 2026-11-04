@@ -42,7 +42,7 @@ class PGPolicy(MLPPolicy):
     def update(self, obses : NDArray, acts : NDArray, weights : NDArray) -> None:
 
         obses = torch.from_numpy(obses).to(torch.float) # Shape : (num_transitions, obs_dim)
-        acts = torch.from_numpy(acts).to(torch.float) # Shape : (num_transitions, act_dim)
+        acts = torch.from_numpy(acts).to(torch.long) # Shape : (num_transitions, )
         weights = torch.from_numpy(weights).to(torch.float) # Shape : (num_transitions, )
 
         self.optimizer.zero_grad()
