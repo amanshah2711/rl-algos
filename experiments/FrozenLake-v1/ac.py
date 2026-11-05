@@ -53,7 +53,7 @@ config = {
 
 # Logging Setup
 run_id = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-writer = SummaryWriter(f'runs/{config['algorithm']}/seed_{config['seed']}/{run_id}')
+writer = SummaryWriter(f'runs/{env_config['id']}/{config['algorithm']}/seed_{config['seed']}/{run_id}')
 
 # Environment Configuration
 train_env = gym.make(**env_config)

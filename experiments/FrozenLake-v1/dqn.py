@@ -1,12 +1,30 @@
 
+# Python Libraries
+import argparse
+import random
+from datetime import datetime, timezone
+
+# RL Implementations
 from src.agents.dqn_agent import DQNAgent
 from src.critics.dqn_critic import DQNCritic
 from src.policies.greedy_policy import EpsilonGreedyPolicy
 from src.utils.visualization import plot_state_action_value
+from src.utils.environment import collect_transitions, collect_episodes, discrete_state_encoder, ReplayBuffer, compute_mean_reward
 
+# Environment
+import gymnasium as gym
 import torch
-import random
+
+# Logging Data
 from torch.utils.tensorboard import SummaryWriter
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--seed', type=int, required=True, help='Random seed used for reproducibility and verifiability of experiments')
+args = parser.parse_args()
+
+random.seed(args.seed)
+torch.manual_seed(args.seed)
+
 
 env_config = {
     'id' : 'FrozenLake-v1',
@@ -27,17 +45,13 @@ config = {
     'critic_lr' : 1e-3,
     'discount_factor' : 0.99,
     'eval_episodes' : 200,
-    'seed' : 2711,
+    'seed' : args.seed,
     **env_config
 }
-random.seed(config['seed'])
-torch.manual_seed(config['seed'])
-from datetime import datetime, timezone
-run_id = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-writer = SummaryWriter(f'runs/{config['algorithm']}/seed_{config['seed']}/{run_id}')
 
-import gymnasium as gym
-from src.utils.environment import collect_transitions, collect_episodes, discrete_state_encoder, ReplayBuffer
+run_id = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+writer = SummaryWriter(f'runs/{env_config['id']}/{config['algorithm']}/seed_{config['seed']}/{run_id}')
+
 train_env = gym.make(**env_config)
 obs_dim = train_env.observation_space.n
 act_dim = train_env.action_space.n
@@ -91,7 +105,7 @@ eval_trajectories, recordings = collect_episodes(eval_env, agent.target_policy.g
 
 
 # Compute success rate
-success_rate = sum([sum(episode.rewards) for episode in eval_trajectories]) / config['eval_episodes']
+success_rate = compute_mean_reward(eval_trajectories)
 
 # Record Videos
 videos = [torch.from_numpy(video).permute(0, 3, 1, 2).unsqueeze(0) for video in recordings]
