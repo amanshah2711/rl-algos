@@ -12,7 +12,7 @@ class Trajectory:
 
 class ReplayBuffer:
 
-    def __init__(self, buffer_size, state_encoder):
+    def __init__(self, buffer_size, state_encoder, rng):
         self.buffer = deque([])
         self.buffer_size = buffer_size 
         self.obses = np.empty(shape=(buffer_size, ), dtype=np.int64)
@@ -21,6 +21,7 @@ class ReplayBuffer:
         self.next_obses = np.empty(shape=(buffer_size, ), dtype=np.int64)
         self.terminals = np.empty(shape=(buffer_size, ))
         self.state_encoder = state_encoder
+        self.rng = rng
         self.end = 0
 
     def add_to_buffer(self, transitions):
@@ -34,7 +35,7 @@ class ReplayBuffer:
         self.end += len(transitions) 
 
     def sample_transitions(self, n):
-        indices = np.random.randint(0, min(self.end, self.buffer_size), size=n)
+        indices = self.rng.integers(0, min(self.end, self.buffer_size), size=n)
         return self.state_encoder(self.obses[indices]), self.acts[indices], self.rewards[indices], self.state_encoder(self.next_obses[indices]), self.terminals[indices]
 
 
@@ -69,7 +70,7 @@ def collect_episodes(env, behavior_policy, num_episodes, state_encoder, seed, sa
         trajectories.append(Trajectory(obses, acts, rewards, next_obses, terminals))
         if i in save_episodes:
             recordings.append(np.array(frames))
-    if save_episodes:
+    if len(save_episodes):
         return trajectories, recordings
     else:
         return trajectories

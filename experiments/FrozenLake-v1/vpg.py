@@ -30,6 +30,7 @@ env_config = {
     'map_name' : '4x4',
     'render_mode' : 'rgb_array'
 }
+
 config = {
     'algorithm' : 'REINFORCE',
     'train_iters' : 2000,
@@ -83,8 +84,6 @@ for i in range(config['train_iters']):
     for name, value in metrics.items():
         writer.add_scalar(name, value, total_env_steps)
 
-
-# hyperparameters for evaluation
 
 save_episodes = random.choices([i for i in range(config['eval_episodes'])], k = 3)
 eval_trajectories, recordings = collect_episodes(eval_env, agent.target_policy.get_action, config['eval_episodes'], state_encoder=state_encoder, seed=config['seed'], save_episodes=save_episodes)

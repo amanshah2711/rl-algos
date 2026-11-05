@@ -1,8 +1,5 @@
 
 from .base_agent import Agent
-from ..policies.greedy_policy import EpsilonGreedyPolicy
-from ..utils.environment import Trajectory, ReplayBuffer
-from ..utils.neural_nets import create_mlp
 
 class DQNAgent(Agent):
 

@@ -1,16 +1,15 @@
 
 import matplotlib.pyplot as plt
-from matplotlib.font_manager import FontProperties
 import seaborn as sns
 import numpy as np
 import gymnasium as gym
 
 landmarks = {0 : (0,0), 1: (0, 4), 2: (4, 0), 3: (4, 3)}
 
-def generate_random_initial_state():
-    taxi_pos = np.random.randint(0, 25)
-    passenger_pos = np.random.randint(0, 4)
-    while (destination := np.random.randint(0, 4)) == passenger_pos:
+def generate_random_initial_state(rng):
+    taxi_pos = rng.integers(0, 25)
+    passenger_pos = rng.integers(0, 4)
+    while (destination := rng.integers(0, 4)) == passenger_pos:
         pass
     state = (taxi_pos * 5 + passenger_pos) * 4 + destination
     return state
@@ -34,8 +33,7 @@ def decode_state(state):
 def encode_state(taxi_pos, passenger_pos, destination):
     return (taxi_pos * 5 + passenger_pos) * 4 + destination
 
-def plot_action_on_image(q_func):
-    initial_state = generate_random_initial_state()
+def plot_action_on_image(q_func, initial_state):
     taxi_pos, passenger_pos, destination = decode_state(initial_state)
     passenger_row, passenger_col = landmarks[passenger_pos]
 
@@ -89,8 +87,7 @@ def plot_action_on_image(q_func):
     
     return fig_pre, fig_post
 
-def plot_state_action_value(q_func):
-    initial_state = generate_random_initial_state()
+def plot_state_action_value(q_func, initial_state):
     taxi_pos, passenger_pos, destination = decode_state(initial_state)
     passenger_row, passenger_col = landmarks[passenger_pos]
     destination_row, destination_col = landmarks[destination]

@@ -9,11 +9,13 @@ from src.agents.dqn_agent import DQNAgent
 from src.critics.dqn_critic import DQNCritic
 from src.policies.greedy_policy import EpsilonGreedyPolicy
 from src.utils.visualization import plot_state_action_value
-from src.utils.environment import collect_transitions, collect_episodes, discrete_state_encoder, ReplayBuffer, compute_mean_reward
+from src.utils.environment import collect_transitions, collect_episodes, discrete_state_encoder, ReplayBuffer
+from src.utils.metrics import compute_mean_return, compute_mean_episode_length
 
 # Environment
 import gymnasium as gym
 import torch
+import numpy as np
 
 # Logging Data
 from torch.utils.tensorboard import SummaryWriter
@@ -24,6 +26,7 @@ args = parser.parse_args()
 
 random.seed(args.seed)
 torch.manual_seed(args.seed)
+rng = np.random.default_rng(seed=args.seed)
 
 
 env_config = {
@@ -45,6 +48,7 @@ config = {
     'critic_lr' : 1e-3,
     'discount_factor' : 0.99,
     'eval_episodes' : 200,
+    'eval_frequency' : 50,
     'seed' : args.seed,
     **env_config
 }
@@ -53,6 +57,7 @@ run_id = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
 writer = SummaryWriter(f'runs/{env_config['id']}/{config['algorithm']}/seed_{config['seed']}/{run_id}')
 
 train_env = gym.make(**env_config)
+eval_env = gym.make(**env_config)
 obs_dim = train_env.observation_space.n
 act_dim = train_env.action_space.n
 obs, info = train_env.reset(seed=config['seed'])
@@ -63,7 +68,6 @@ if isinstance(train_env.observation_space, gym.spaces.Discrete):
 else:
     state_encoder = lambda x : x
 
-obs = state_encoder(obs)
 critic = DQNCritic(
     obs_dim=obs_dim,
     hidden_layer_dim=config['critic_hidden_layer_dim'],
@@ -73,8 +77,8 @@ critic = DQNCritic(
     discount_factor=config['discount_factor']
 )
 
-behavior_policy = EpsilonGreedyPolicy(critic=critic, epsilon=config['exploration_rate'], action_sampler=train_env.action_space.sample)
-target_policy = EpsilonGreedyPolicy(critic=critic, epsilon=0, action_sampler=train_env.action_space.sample)
+behavior_policy = EpsilonGreedyPolicy(critic=critic, epsilon=config['exploration_rate'], action_sampler=train_env.action_space.sample, rng=rng)
+target_policy = EpsilonGreedyPolicy(critic=critic, epsilon=0, action_sampler=train_env.action_space.sample, rng=rng)
 
 agent = DQNAgent(
     critic=critic,
@@ -84,7 +88,7 @@ agent = DQNAgent(
     behavior_policy = behavior_policy,
     target_policy=target_policy,
     discount_factor=config['discount_factor'],
-    replay_buffer=ReplayBuffer(1_000_000, state_encoder=state_encoder)
+    replay_buffer=ReplayBuffer(1_000_000, state_encoder=state_encoder, rng=rng)
 )
 
 for i in range(config['train_iters']):
@@ -96,16 +100,23 @@ for i in range(config['train_iters']):
     for (key, value) in metrics.items():
         writer.add_scalar(key, value, total_env_steps)
 
+    if i % config['eval_frequency'] == 0:
+        eval_trajectories = collect_episodes(eval_env,
+                                            agent.target_policy.get_action, 
+                                            config['eval_episodes'], 
+                                            state_encoder=state_encoder, 
+                                            seed=config['seed'])
+        mean_return = compute_mean_return(eval_trajectories)
+        mean_episode_length = compute_mean_episode_length(eval_trajectories)
+        writer.add_scalar('eval/mean_return', mean_return, total_env_steps)
+        writer.add_scalar('eval/mean_episode_length', mean_episode_length, total_env_steps)
 
-eval_env = gym.make(**env_config)
 
-
-save_episodes = random.choices([i for i in range(config['eval_episodes'])], k = 3)
+save_episodes = rng.choice([i for i in range(config['eval_episodes'])], size=3, replace=False)
 eval_trajectories, recordings = collect_episodes(eval_env, agent.target_policy.get_action, config['eval_episodes'], state_encoder=state_encoder, seed=config['seed'], save_episodes=save_episodes)
 
-
 # Compute success rate
-success_rate = compute_mean_reward(eval_trajectories)
+success_rate = compute_mean_return(eval_trajectories)
 
 # Record Videos
 videos = [torch.from_numpy(video).permute(0, 3, 1, 2).unsqueeze(0) for video in recordings]
@@ -116,7 +127,6 @@ for i, video in enumerate(videos):
         global_step=total_env_steps,
         fps=4
     )
-
 
 writer.add_figure('critic/state_value_estimates',
                   plot_state_action_value(critic.get_state_action_value, state_encoder),

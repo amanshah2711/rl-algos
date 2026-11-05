@@ -1,6 +1,7 @@
 
 from .base_agent import Agent
-from ..utils.environment import Trajectory, compute_returns
+from ..utils.environment import Trajectory
+from ..utils.metrics import compute_returns
 import numpy as np
 
 class PGAgent(Agent):
