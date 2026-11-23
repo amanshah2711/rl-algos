@@ -9,11 +9,13 @@ from src.agents.ac_agent import ACAgent
 from src.policies.pg_policy import PGPolicy
 from src.critics.value_critic import DeepValueCritic
 from src.utils.environment import collect_episodes, discrete_state_encoder
-from src.utils.visualization import plot_value
+from src.utils.metrics import compute_mean_return, compute_mean_episode_length
+from src.utils.frozen_lake import plot_value 
 
 # Environment 
 import gymnasium as gym
 import torch
+import numpy as np
 
 # Logging Data
 from torch.utils.tensorboard import SummaryWriter
@@ -24,6 +26,7 @@ args = parser.parse_args()
 
 random.seed(args.seed)
 torch.manual_seed(args.seed)
+rng = np.random.default_rng(seed=args.seed)
 
 env_config = {
     'id' : 'FrozenLake-v1',
@@ -46,6 +49,7 @@ config = {
     'discount_factor' : 0.99,
     'critic_updates_per_actor_update' : 5,
     'eval_episodes' : 200,
+    'eval_frequency' : 50,
     'seed' : args.seed,
     **env_config
 }
@@ -60,6 +64,8 @@ train_env = gym.make(**env_config)
 obs_dim = train_env.observation_space.n
 act_dim = train_env.action_space.n
 total_env_steps = 0
+
+eval_env = gym.make(**env_config)
 
 if isinstance(train_env.observation_space, gym.spaces.Discrete):
     state_encoder = lambda obs: discrete_state_encoder(obs, obs_dim)
@@ -97,15 +103,25 @@ for i in range(config['train_iters']):
     for (key, value) in metrics.items():
         writer.add_scalar(key, value, total_env_steps)
 
+    if i % config['eval_frequency'] == 0:
+        eval_trajectories = collect_episodes(eval_env,
+                                            agent.target_policy.get_action, 
+                                            config['eval_episodes'], 
+                                            state_encoder=state_encoder, 
+                                            seed=config['seed'])
+        mean_return = compute_mean_return(eval_trajectories)
+        mean_episode_length = compute_mean_episode_length(eval_trajectories)
+        writer.add_scalar('eval/mean_return', mean_return, total_env_steps)
+        writer.add_scalar('eval/mean_episode_length', mean_episode_length, total_env_steps)
+
 
 # Final Evaluation
-eval_env = gym.make(**env_config)
 
-save_episodes = random.choices([i for i in range(config['eval_episodes'])], k = 3)
+save_episodes = rng.choice([i for i in range(config['eval_episodes'])], size=3, replace=False)
 eval_trajectories, recordings = collect_episodes(eval_env, agent.target_policy.get_action, config['eval_episodes'], state_encoder=state_encoder, seed=config['seed'], save_episodes=save_episodes)
 
 # Compute success rate 
-success_rate = sum([sum(episode.rewards) for episode in eval_trajectories]) / config['eval_episodes']
+success_rate = compute_mean_return(eval_trajectories)
 
 # Record Videos
 videos = [torch.from_numpy(video).permute(0, 3, 1, 2).unsqueeze(0) for video in recordings]

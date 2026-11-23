@@ -38,11 +38,11 @@ env_config = {
 config = {
     'algorithm' : 'DQN',
 
-    'train_iters' : 3000,
+    'train_iters' : 6000,
     'transitions_per_train_iter' : 500,
     'discount_factor' : 0.99,
     'batch_size': 256,
-    'replay_buffer_size': 1_000_000,
+    'replay_buffer_size': 100_000,
 
     'critic_hidden_layer_dim' : 16,
     'critic_num_hidden_layers': 2,

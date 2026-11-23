@@ -12,13 +12,17 @@ class Trajectory:
 
 class ReplayBuffer:
 
-    def __init__(self, buffer_size, state_encoder, rng):
+    def __init__(self, buffer_size, state_encoder, rng, continuous, obs_dim):
         self.buffer = deque([])
         self.buffer_size = buffer_size 
-        self.obses = np.empty(shape=(buffer_size, ), dtype=np.int64)
+        if continuous:
+            self.obses = np.empty(shape=(buffer_size, obs_dim ), dtype=np.float64)
+            self.next_obses = np.empty(shape=(buffer_size, obs_dim), dtype=np.float64)
+        else:
+            self.obses = np.empty(shape=(buffer_size, ), dtype=np.int64)
+            self.next_obses = np.empty(shape=(buffer_size, ), dtype=np.int64)
         self.acts = np.empty(shape=(buffer_size, ))
         self.rewards = np.empty(shape=(buffer_size, ))
-        self.next_obses = np.empty(shape=(buffer_size, ), dtype=np.int64)
         self.terminals = np.empty(shape=(buffer_size, ))
         self.state_encoder = state_encoder
         self.rng = rng

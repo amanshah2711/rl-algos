@@ -8,10 +8,12 @@ from datetime import datetime, timezone
 from src.agents.pg_agent import PGAgent
 from src.policies.pg_policy import PGPolicy
 from src.utils.environment import collect_episodes, discrete_state_encoder
+from src.utils.metrics import compute_mean_return, compute_mean_episode_length
 
 # Environment 
 import gymnasium as gym
 import torch
+import numpy as np
 
 # Logging Data
 from torch.utils.tensorboard import SummaryWriter
@@ -22,6 +24,7 @@ args = parser.parse_args()
 
 random.seed(args.seed)
 torch.manual_seed(args.seed)
+rng = np.random.default_rng(seed=args.seed)
 
 # hyperparameter initialization for training
 env_config = {
@@ -40,6 +43,7 @@ config = {
     'actor_lr' : 1e-3,
     'discount_factor' : 0.99,
     'eval_episodes' : 200,
+    'eval_frequency' : 50,
     'seed' : args.seed,
     **env_config
 }
@@ -84,12 +88,23 @@ for i in range(config['train_iters']):
     for name, value in metrics.items():
         writer.add_scalar(name, value, total_env_steps)
 
+    if i % config['eval_frequency'] == 0:
+        eval_trajectories = collect_episodes(eval_env,
+                                            agent.target_policy.get_action, 
+                                            config['eval_episodes'], 
+                                            state_encoder=state_encoder, 
+                                            seed=config['seed'])
+        mean_return = compute_mean_return(eval_trajectories)
+        mean_episode_length = compute_mean_episode_length(eval_trajectories)
+        writer.add_scalar('eval/mean_return', mean_return, total_env_steps)
+        writer.add_scalar('eval/mean_episode_length', mean_episode_length, total_env_steps)
 
-save_episodes = random.choices([i for i in range(config['eval_episodes'])], k = 3)
+
+save_episodes = rng.choice([i for i in range(config['eval_episodes'])], size=3, replace=False)
 eval_trajectories, recordings = collect_episodes(eval_env, agent.target_policy.get_action, config['eval_episodes'], state_encoder=state_encoder, seed=config['seed'], save_episodes=save_episodes)
 
 # Compute success rate 
-success_rate = sum([sum(episode.rewards) for episode in eval_trajectories]) / config['eval_episodes']
+success_rate = compute_mean_return(eval_trajectories)
 
 # Record Videos
 videos = [torch.from_numpy(video).permute(0, 3, 1, 2).unsqueeze(0) for video in recordings]

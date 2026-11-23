@@ -37,16 +37,20 @@ env_config = {
 }
 config = {
     'algorithm' : 'DQN',
+
     'train_iters' : 1000,
     'transitions_per_train_iter' : 500,
+    'discount_factor' : 0.99,
     'target_update_freq' : 5,
     'batch_size': 256,
+    'replay_buffer_size' : 5000,
+
     'critic_hidden_layer_dim' : 16,
-    'critic_num_hidden_layers': 2,
-    'critic_updates_per_batch' : 20,
+    'critic_num_hidden_layers': 1,
+    'critic_updates_per_batch' : 5,
     'exploration_rate' : 0.05,
-    'critic_lr' : 1e-3,
-    'discount_factor' : 0.99,
+    'critic_lr' : 5e-4,
+    
     'eval_episodes' : 200,
     'eval_frequency' : 50,
     'seed' : args.seed,
@@ -96,6 +100,7 @@ for i in range(config['train_iters']):
     obs, transitions = collect_transitions(train_env, obs, agent.behavior_policy.get_action, num_transitions=config['transitions_per_train_iter'], state_encoder=state_encoder, seed=config['seed'])
     total_env_steps += len(transitions)
     agent.behavior_policy.epsilon = max(config['exploration_rate'], 1 - total_env_steps * (1 - config['exploration_rate']) / (config['train_iters'] * config['transitions_per_train_iter']))
+    writer.add_scalar('train/epsilon', agent.behavior_policy.epsilon, total_env_steps)
     metrics = agent.train(transitions=transitions)
     for (key, value) in metrics.items():
         writer.add_scalar(key, value, total_env_steps)
@@ -137,7 +142,6 @@ writer.add_hparams(
     metric_dict={
         'eval/success_rate': success_rate,
     },
-
 )
 writer.close()
 train_env.close()
